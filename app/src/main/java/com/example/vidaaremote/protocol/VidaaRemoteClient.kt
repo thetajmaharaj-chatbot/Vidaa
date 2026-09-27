@@ -7,9 +7,9 @@ interface VidaaRemoteClient {
     val isConnected: Boolean
     val isAuthenticated: Boolean
 
-    fun connect(device: TvDevice): Result<Unit>
-    fun startPairing(): Result<Unit>
-    fun authenticate(pin: String): Result<Unit>
-    fun sendKey(key: VidaaKey): Result<Unit>
+    suspend fun connect(device: TvDevice): Result<Unit>
+    suspend fun startPairing(): Result<Unit>
+    suspend fun authenticate(pin: String): Result<Unit>
+    suspend fun sendKey(key: VidaaKey): Result<Unit>
     fun disconnect()
 }
