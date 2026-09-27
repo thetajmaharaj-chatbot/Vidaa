@@ -16,6 +16,7 @@ import com.example.vidaaremote.protocol.VidaaRemoteClient
 
 enum class AppScreen { DISCOVERY, PAIRING, REMOTE }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VidaaRemoteApp(client: VidaaRemoteClient) {
     var screen by remember { mutableStateOf(AppScreen.DISCOVERY) }
