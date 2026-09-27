@@ -43,6 +43,16 @@ class PrototypeVidaaClient : VidaaRemoteClient {
         else Result.failure(IllegalStateException("TV is not paired"))
     }
 
+    override suspend fun sendText(text: String): Result<Unit> {
+        return if (isConnected && isAuthenticated && text.isNotBlank()) Result.success(Unit)
+        else Result.failure(IllegalStateException("TV is not paired or text is empty"))
+    }
+
+    override suspend fun launchYouTube(): Result<Unit> {
+        return if (isConnected && isAuthenticated) Result.success(Unit)
+        else Result.failure(IllegalStateException("TV is not paired"))
+    }
+
     override fun disconnect() {
         connectedDevice = null
         isConnected = false
