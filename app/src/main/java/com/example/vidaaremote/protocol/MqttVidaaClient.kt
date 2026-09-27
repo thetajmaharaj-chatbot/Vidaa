@@ -474,7 +474,7 @@ class MqttVidaaClient(
 
     private companion object {
         const val PATTERN = "38D65DC30F45109A369A86FCE866A85B"
-        const val VALUE_SUFFIX_MODERN = "h!i@s#$v%i^d&a*a"
+        const val VALUE_SUFFIX_MODERN = "h!i@s#\$v%i^d&a*a"
         const val VALUE_SUFFIX_LEGACY = "h*i&s%e!r^v0i1c9"
         const val TIME_XOR_CONSTANT = 0x569814772B03A968L
 
