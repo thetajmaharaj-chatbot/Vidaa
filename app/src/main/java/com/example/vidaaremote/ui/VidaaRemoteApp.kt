@@ -116,6 +116,19 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                                 .onFailure { message = it.message }
                             busy = false
                         }
+                    },
+                    onLegacyNoPin = {
+                        scope.launch {
+                            busy = true
+                            message = "Trying P0218 / RemoteNOW compatibility mode…"
+                            client.useLegacyNoPinMode()
+                                .onSuccess {
+                                    message = "Legacy no-PIN mode connected. Test the remote buttons."
+                                    screen = AppScreen.REMOTE
+                                }
+                                .onFailure { message = it.message }
+                            busy = false
+                        }
                     }
                 )
 
@@ -180,6 +193,7 @@ private fun PairingScreen(
     busy: Boolean,
     onRestartPairing: () -> Unit,
     onPair: (String) -> Unit,
+    onLegacyNoPin: () -> Unit,
 ) {
     var pin by remember { mutableStateOf("") }
 
@@ -213,6 +227,23 @@ private fun PairingScreen(
         onClick = onRestartPairing,
     ) {
         Text("Request a new PIN")
+    }
+
+    Spacer(Modifier.height(8.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(12.dp))
+
+    Text(
+        "Software V0001.01.00L.P0218 may use the older RemoteNOW protocol and may not show a PIN.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Spacer(Modifier.height(10.dp))
+    OutlinedButton(
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !busy,
+        onClick = onLegacyNoPin,
+    ) {
+        Text("No PIN appears — use Legacy / P0218 mode")
     }
 }
 
