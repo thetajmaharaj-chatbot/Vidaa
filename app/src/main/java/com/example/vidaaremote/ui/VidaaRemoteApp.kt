@@ -220,13 +220,11 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                             message = "Opening YouTube voice search…"
                             client.launchYouTube()
                                 .onSuccess {
+                                    // P0218/older YouTube layouts differ from newer VIDAA.
+                                    // Do not navigate LEFT/UP/OK here: on P0218 that sequence
+                                    // lands on the virtual keyboard's "v" key and types it.
                                     delay(2500)
-                                    client.sendKey(VidaaKey.LEFT)
-                                    delay(180)
-                                    client.sendKey(VidaaKey.UP)
-                                    delay(180)
-                                    client.sendKey(VidaaKey.OK)
-                                    delay(650)
+                                    message = "YouTube opened. Select Search on the TV, then speak."
                                     busy = false
                                     launchSpeechRecognizer()
                                 }
