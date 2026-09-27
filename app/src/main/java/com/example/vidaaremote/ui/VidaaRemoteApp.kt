@@ -117,14 +117,13 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                             busy = false
                         }
                     },
-                    onLegacyNoPin = {
+                    onLegacyPairing = {
                         scope.launch {
                             busy = true
-                            message = "Trying P0218 / RemoteNOW compatibility mode…"
-                            client.useLegacyNoPinMode()
+                            message = "Starting P0218 / RemoteNOW pairing…"
+                            client.startLegacyPairing()
                                 .onSuccess {
-                                    message = "Legacy no-PIN mode connected. Test the remote buttons."
-                                    screen = AppScreen.REMOTE
+                                    message = "PIN displayed by legacy mode. Enter that PIN above, then tap Pair TV."
                                 }
                                 .onFailure { message = it.message }
                             busy = false
@@ -193,7 +192,7 @@ private fun PairingScreen(
     busy: Boolean,
     onRestartPairing: () -> Unit,
     onPair: (String) -> Unit,
-    onLegacyNoPin: () -> Unit,
+    onLegacyPairing: () -> Unit,
 ) {
     var pin by remember { mutableStateOf("") }
 
@@ -234,16 +233,16 @@ private fun PairingScreen(
     Spacer(Modifier.height(12.dp))
 
     Text(
-        "Software V0001.01.00L.P0218 may use the older RemoteNOW protocol and may not show a PIN.",
+        "P0218 firmware shows its PIN after the older RemoteNOW connection is started.",
         style = MaterialTheme.typography.bodySmall,
     )
     Spacer(Modifier.height(10.dp))
     OutlinedButton(
         modifier = Modifier.fillMaxWidth(),
         enabled = !busy,
-        onClick = onLegacyNoPin,
+        onClick = onLegacyPairing,
     ) {
-        Text("No PIN appears — use Legacy / P0218 mode")
+        Text("Show PIN — Legacy / P0218 mode")
     }
 }
 
