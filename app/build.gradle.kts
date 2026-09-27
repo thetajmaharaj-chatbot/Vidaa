@@ -44,6 +44,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
 
     implementation("com.hivemq:hivemq-mqtt-client:1.4.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
