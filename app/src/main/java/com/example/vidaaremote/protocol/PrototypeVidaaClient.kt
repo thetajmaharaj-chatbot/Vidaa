@@ -28,13 +28,13 @@ class PrototypeVidaaClient : VidaaRemoteClient {
         if (!pin.matches(Regex("\\d{4,8}"))) {
             return Result.failure(IllegalArgumentException("Enter the PIN shown on the TV"))
         }
-        isAuthenticated = false
+        isAuthenticated = true
         return Result.success(Unit)
     }
 
     override suspend fun startLegacyPairing(): Result<Unit> {
         if (!isConnected) return Result.failure(IllegalStateException("Not connected"))
-        isAuthenticated = true
+        isAuthenticated = false
         return Result.success(Unit)
     }
 
