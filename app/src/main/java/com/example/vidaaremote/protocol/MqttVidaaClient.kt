@@ -67,6 +67,29 @@ class MqttVidaaClient(
             disconnectInternal()
             connectedDevice = device
 
+            if (isLegacyAuthorized(device.host)) {
+                val legacyTopicId = mobileDeviceId.uppercase(Locale.US) + "\$normal"
+                val legacyCandidate = buildMqttClient(device, legacyTopicId, STATIC_USERNAME)
+                try {
+                    connectClient(legacyCandidate, STATIC_USERNAME, STATIC_PASSWORD)
+                    mqtt = legacyCandidate
+                    clientId = legacyTopicId
+                    topicClientId = legacyTopicId
+                    mqttUsername = STATIC_USERNAME
+                    currentAuthMethod = AuthMethod.LEGACY
+                    isConnected = true
+                    isAuthenticated = true
+                    subscribeToResponses(legacyCandidate)
+                    return@runCatching
+                } catch (_: Exception) {
+                    try {
+                        legacyCandidate.disconnect()
+                    } catch (_: Exception) {
+                    }
+                    clearLegacyAuthorized(device.host)
+                }
+            }
+
             val stored = loadStoredCredentials(device.host)
             if (stored != null) {
                 val tokenClient = buildMqttClient(
@@ -198,6 +221,9 @@ class MqttVidaaClient(
             }
 
             isAuthenticated = true
+            if (currentAuthMethod == AuthMethod.LEGACY && topicClientId.endsWith("\$normal")) {
+                connectedDevice?.host?.let { saveLegacyAuthorized(it) }
+            }
         }
     }
 
@@ -309,6 +335,7 @@ class MqttVidaaClient(
             "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcodetoast",
             "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcode",
             "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcodeclose",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/sourcelist",
             "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/tokenissuance",
             "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/platform_service/data/tokenissuance",
             "/remoteapp/mobile/broadcast/ui_service/state",
@@ -332,6 +359,18 @@ class MqttVidaaClient(
     }
 
     private fun handleMessage(topic: String, payloadText: String) {
+        if (currentAuthMethod == AuthMethod.LEGACY &&
+            topicClientId.endsWith("\$normal") &&
+            topic.endsWith("/sourcelist") &&
+            payloadText.isNotBlank()
+        ) {
+            authAccepted = true
+            isAuthenticated = true
+            connectedDevice?.host?.let { saveLegacyAuthorized(it) }
+            authLatch?.countDown()
+            return
+        }
+
         if (topic.contains("tokenissuance")) {
             val json = parseObject(payloadText) ?: return
             val accessToken = json.optString("accesstoken")
@@ -494,6 +533,17 @@ class MqttVidaaClient(
             .remove(prefix + "access_token")
             .remove(prefix + "refresh_token")
             .apply()
+    }
+
+    private fun isLegacyAuthorized(host: String): Boolean =
+        prefs.getBoolean("tv.$host.legacy_authorized", false)
+
+    private fun saveLegacyAuthorized(host: String) {
+        prefs.edit().putBoolean("tv.$host.legacy_authorized", true).apply()
+    }
+
+    private fun clearLegacyAuthorized(host: String) {
+        prefs.edit().remove("tv.$host.legacy_authorized").apply()
     }
 
     private enum class AuthMethod {
