@@ -201,7 +201,7 @@ class MqttVidaaClient(
         }
     }
 
-    override suspend fun useLegacyNoPinMode(): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun startLegacyPairing(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val device = connectedDevice ?: throw IllegalStateException("Connect to the TV first.")
 
@@ -227,10 +227,12 @@ class MqttVidaaClient(
             mqttUsername = STATIC_USERNAME
             currentAuthMethod = AuthMethod.LEGACY
             isConnected = true
-            isAuthenticated = true
+            isAuthenticated = false
+            authAccepted = false
             subscribeToResponses(candidate)
 
-            // Ask for current state as a harmless connectivity probe.
+            // On P0218 / RemoteNOW-era firmware this unauthorized state request
+            // is what causes the TV to display its pairing PIN.
             try {
                 publish("/remoteapp/tv/ui_service/${topicClientId}/actions/gettvstate", "")
             } catch (_: Exception) {
