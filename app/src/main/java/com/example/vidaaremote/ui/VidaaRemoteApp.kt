@@ -1,6 +1,14 @@
 package com.example.vidaaremote.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -8,12 +16,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.vidaaremote.model.TvDevice
 import com.example.vidaaremote.protocol.VidaaKey
 import com.example.vidaaremote.protocol.VidaaRemoteClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 enum class AppScreen { DISCOVERY, PAIRING, REMOTE }
 
@@ -25,6 +36,48 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
     var selectedDevice by remember { mutableStateOf<TvDevice?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var keyboardText by remember { mutableStateOf("") }
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+
+            if (!spoken.isNullOrBlank()) {
+                keyboardText = spoken
+                scope.launch {
+                    busy = true
+                    message = "Searching YouTube for: $spoken"
+                    client.sendText(spoken)
+                        .onSuccess {
+                            delay(450)
+                            client.sendKey(VidaaKey.OK)
+                            message = "Voice search sent: $spoken"
+                        }
+                        .onFailure { message = it.message }
+                    busy = false
+                }
+            }
+        }
+    }
+
+    fun launchSpeechRecognizer() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+            )
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "What do you want to search on YouTube?")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+        runCatching { voiceLauncher.launch(intent) }
+            .onFailure { message = "Speech recognition is not available on this phone." }
+    }
 
     Scaffold(
         topBar = {
@@ -52,6 +105,7 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
             if (busy) {
@@ -134,10 +188,52 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                 AppScreen.REMOTE -> RemoteScreen(
                     device = selectedDevice,
                     busy = busy,
+                    keyboardText = keyboardText,
+                    onKeyboardTextChange = { keyboardText = it },
                     onKey = { key ->
                         scope.launch {
                             client.sendKey(key)
                                 .onFailure { message = it.message }
+                        }
+                    },
+                    onSendText = { text ->
+                        scope.launch {
+                            busy = true
+                            client.sendText(text)
+                                .onSuccess { message = "Text sent to TV." }
+                                .onFailure { message = it.message }
+                            busy = false
+                        }
+                    },
+                    onYouTube = {
+                        scope.launch {
+                            busy = true
+                            client.launchYouTube()
+                                .onSuccess { message = "YouTube launched." }
+                                .onFailure { message = it.message }
+                            busy = false
+                        }
+                    },
+                    onVoiceYouTube = {
+                        scope.launch {
+                            busy = true
+                            message = "Opening YouTube voice search…"
+                            client.launchYouTube()
+                                .onSuccess {
+                                    delay(2500)
+                                    client.sendKey(VidaaKey.LEFT)
+                                    delay(180)
+                                    client.sendKey(VidaaKey.UP)
+                                    delay(180)
+                                    client.sendKey(VidaaKey.OK)
+                                    delay(650)
+                                    busy = false
+                                    launchSpeechRecognizer()
+                                }
+                                .onFailure {
+                                    message = it.message
+                                    busy = false
+                                }
                         }
                     }
                 )
@@ -250,7 +346,12 @@ private fun PairingScreen(
 private fun RemoteScreen(
     device: TvDevice?,
     busy: Boolean,
+    keyboardText: String,
+    onKeyboardTextChange: (String) -> Unit,
     onKey: (VidaaKey) -> Unit,
+    onSendText: (String) -> Unit,
+    onYouTube: () -> Unit,
+    onVoiceYouTube: () -> Unit,
 ) {
     Text(device?.name ?: "VIDAA TV", style = MaterialTheme.typography.headlineMedium)
     Text("${device?.host.orEmpty()} • connected", style = MaterialTheme.typography.bodySmall)
@@ -307,6 +408,78 @@ private fun RemoteScreen(
         OutlinedButton(enabled = !busy, onClick = { onKey(VidaaKey.PAUSE) }) { Icon(Icons.Default.Pause, "Pause") }
         OutlinedButton(enabled = !busy, onClick = { onKey(VidaaKey.FAST_FORWARD) }) { Icon(Icons.Default.FastForward, "Fast forward") }
     }
+
+    Spacer(Modifier.height(24.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(16.dp))
+
+    Text("YouTube & keyboard", style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(10.dp))
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Button(
+            modifier = Modifier.weight(1f),
+            enabled = !busy,
+            onClick = onYouTube,
+        ) {
+            Icon(Icons.Default.PlayCircleFilled, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("YouTube")
+        }
+
+        FilledTonalButton(
+            modifier = Modifier.weight(1f),
+            enabled = !busy,
+            onClick = onVoiceYouTube,
+        ) {
+            Icon(Icons.Default.Mic, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("Voice Search")
+        }
+    }
+
+    Spacer(Modifier.height(14.dp))
+
+    OutlinedTextField(
+        value = keyboardText,
+        onValueChange = onKeyboardTextChange,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !busy,
+        label = { Text("QWERTY keyboard / TV text") },
+        placeholder = { Text("Type on your phone…") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Text,
+            imeAction = ImeAction.Send,
+        ),
+        keyboardActions = KeyboardActions(
+            onSend = {
+                if (keyboardText.isNotBlank()) {
+                    onSendText(keyboardText)
+                }
+            }
+        ),
+    )
+
+    Spacer(Modifier.height(10.dp))
+    Button(
+        modifier = Modifier.fillMaxWidth(),
+        enabled = keyboardText.isNotBlank() && !busy,
+        onClick = { onSendText(keyboardText) },
+    ) {
+        Icon(Icons.Default.Keyboard, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Send text to TV")
+    }
+
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "Tip: open a search or text field on the TV first. Voice Search opens YouTube and attempts to focus its Search screen automatically.",
+        style = MaterialTheme.typography.bodySmall,
+    )
 }
 
 @Composable
