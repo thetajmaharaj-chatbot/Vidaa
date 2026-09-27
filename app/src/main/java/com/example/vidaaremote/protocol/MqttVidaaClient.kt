@@ -50,6 +50,7 @@ class MqttVidaaClient(
 
     private var mqtt: Mqtt3AsyncClient? = null
     private var clientId: String = ""
+    private var topicClientId: String = ""
     private var mqttUsername: String = ""
     private var currentAuthMethod: AuthMethod = AuthMethod.MODERN
 
@@ -77,6 +78,7 @@ class MqttVidaaClient(
                     connectClient(tokenClient, stored.username, stored.accessToken)
                     mqtt = tokenClient
                     clientId = stored.clientId
+                    topicClientId = stored.clientId
                     mqttUsername = stored.username
                     isConnected = true
                     isAuthenticated = true
@@ -101,6 +103,7 @@ class MqttVidaaClient(
                     connectClient(candidate, creds.username, creds.password)
                     mqtt = candidate
                     clientId = creds.clientId
+                    topicClientId = creds.clientId
                     mqttUsername = creds.username
                     currentAuthMethod = method
                     isConnected = true
@@ -123,6 +126,7 @@ class MqttVidaaClient(
                 connectClient(staticCandidate, STATIC_USERNAME, STATIC_PASSWORD)
                 mqtt = staticCandidate
                 clientId = staticClientId
+                topicClientId = mobileDeviceId.uppercase(Locale.US) + "\$normal"
                 mqttUsername = STATIC_USERNAME
                 currentAuthMethod = AuthMethod.LEGACY
                 isConnected = true
@@ -197,12 +201,49 @@ class MqttVidaaClient(
         }
     }
 
+    override suspend fun useLegacyNoPinMode(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val device = connectedDevice ?: throw IllegalStateException("Connect to the TV first.")
+
+            val oldClient = mqtt
+            mqtt = null
+            isConnected = false
+            isAuthenticated = false
+            if (oldClient != null) {
+                try {
+                    oldClient.disconnect().get(3, TimeUnit.SECONDS)
+                } catch (_: Exception) {
+                }
+            }
+
+            val legacyTopicId = mobileDeviceId.uppercase(Locale.US) + "\$normal"
+            val legacyMqttId = legacyTopicId
+            val candidate = buildMqttClient(device, legacyMqttId, STATIC_USERNAME)
+
+            connectClient(candidate, STATIC_USERNAME, STATIC_PASSWORD)
+            mqtt = candidate
+            clientId = legacyMqttId
+            topicClientId = legacyTopicId
+            mqttUsername = STATIC_USERNAME
+            currentAuthMethod = AuthMethod.LEGACY
+            isConnected = true
+            isAuthenticated = true
+            subscribeToResponses(candidate)
+
+            // Ask for current state as a harmless connectivity probe.
+            try {
+                publish("/remoteapp/tv/ui_service/${topicClientId}/actions/gettvstate", "")
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     override suspend fun sendKey(key: VidaaKey): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             requireConnected()
             check(isAuthenticated) { "Pair the TV before using the remote." }
             publish(
-                "/remoteapp/tv/remote_service/${clientId}/actions/sendkey",
+                "/remoteapp/tv/remote_service/${topicClientId.ifBlank { clientId }}/actions/sendkey",
                 key.wireValue,
             )
         }
@@ -262,12 +303,12 @@ class MqttVidaaClient(
 
     private fun subscribeToResponses(client: Mqtt3AsyncClient) {
         val topics = listOf(
-            "/remoteapp/mobile/${clientId}/ui_service/data/authentication",
-            "/remoteapp/mobile/${clientId}/ui_service/data/authenticationcodetoast",
-            "/remoteapp/mobile/${clientId}/ui_service/data/authenticationcode",
-            "/remoteapp/mobile/${clientId}/ui_service/data/authenticationcodeclose",
-            "/remoteapp/mobile/${clientId}/ui_service/data/tokenissuance",
-            "/remoteapp/mobile/${clientId}/platform_service/data/tokenissuance",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authentication",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcodetoast",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcode",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/authenticationcodeclose",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/ui_service/data/tokenissuance",
+            "/remoteapp/mobile/${topicClientId.ifBlank { clientId }}/platform_service/data/tokenissuance",
             "/remoteapp/mobile/broadcast/ui_service/state",
             "/remoteapp/mobile/broadcast/platform_service/actions/volumechange",
         )
@@ -340,7 +381,7 @@ class MqttVidaaClient(
     }
 
     private fun topic(service: String, action: String): String =
-        "/remoteapp/tv/$service/${clientId}/actions/$action"
+        "/remoteapp/tv/$service/${topicClientId.ifBlank { clientId }}/actions/$action"
 
     private fun requireConnected() {
         check(isConnected && mqtt != null) { "Connect to the TV first." }
