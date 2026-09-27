@@ -10,6 +10,7 @@ interface VidaaRemoteClient {
     suspend fun connect(device: TvDevice): Result<Unit>
     suspend fun startPairing(): Result<Unit>
     suspend fun authenticate(pin: String): Result<Unit>
+    suspend fun useLegacyNoPinMode(): Result<Unit>
     suspend fun sendKey(key: VidaaKey): Result<Unit>
     fun disconnect()
 }
