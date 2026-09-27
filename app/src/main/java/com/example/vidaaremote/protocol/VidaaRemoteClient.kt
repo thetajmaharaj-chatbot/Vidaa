@@ -12,5 +12,7 @@ interface VidaaRemoteClient {
     suspend fun authenticate(pin: String): Result<Unit>
     suspend fun startLegacyPairing(): Result<Unit>
     suspend fun sendKey(key: VidaaKey): Result<Unit>
+    suspend fun sendText(text: String): Result<Unit>
+    suspend fun launchYouTube(): Result<Unit>
     fun disconnect()
 }
