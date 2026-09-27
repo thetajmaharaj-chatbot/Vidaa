@@ -18,6 +18,6 @@ enum class VidaaKey(val wireValue: String) {
     PLAY("KEY_PLAY"),
     PAUSE("KEY_PAUSE"),
     STOP("KEY_STOP"),
-    REWIND("KEY_REWIND"),
-    FAST_FORWARD("KEY_FASTFORWARD"),
+    REWIND("KEY_BACK"),
+    FAST_FORWARD("KEY_FORWARDS"),
 }
