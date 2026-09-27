@@ -31,6 +31,13 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Fetch VIDAA mTLS compatibility certificate
+        shell: bash
+        run: |
+          mkdir -p app/src/main/assets
+          curl -fsSL https://raw.githubusercontent.com/tombabolewski/vidaa-control/main/vidaa/certs/vidaa_client.pem -o app/src/main/assets/vidaa_client.pem
+          curl -fsSL https://raw.githubusercontent.com/tombabolewski/vidaa-control/main/vidaa/certs/vidaa_client.key -o app/src/main/assets/vidaa_client.key
+
       - name: Set up Gradle 9.6
         uses: gradle/actions/setup-gradle@v4
         with:
