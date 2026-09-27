@@ -32,6 +32,12 @@ class PrototypeVidaaClient : VidaaRemoteClient {
         return Result.success(Unit)
     }
 
+    override suspend fun useLegacyNoPinMode(): Result<Unit> {
+        if (!isConnected) return Result.failure(IllegalStateException("Not connected"))
+        isAuthenticated = true
+        return Result.success(Unit)
+    }
+
     override suspend fun sendKey(key: VidaaKey): Result<Unit> {
         return if (isConnected && isAuthenticated) Result.success(Unit)
         else Result.failure(IllegalStateException("TV is not paired"))
