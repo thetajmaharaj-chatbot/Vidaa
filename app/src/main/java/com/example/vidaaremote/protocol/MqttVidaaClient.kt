@@ -289,8 +289,23 @@ class MqttVidaaClient(
                 .toString()
 
             val id = topicClientId.ifBlank { clientId }
+
+            // Standard VIDAA virtual-keyboard injection.
             publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", payload)
             publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", payload)
+
+            if (currentAuthMethod == AuthMethod.LEGACY) {
+                // RemoteNOW/P0218 compatibility: older sets differ in which
+                // service/action accepts keyboard input. Send the equivalent
+                // legacy variants only for the legacy profile.
+                publish("/remoteapp/tv/ui_service/$id/actions/txtinputdata", payload)
+                publish("/remoteapp/tv/ui_service/$id/actions/bwsinputdata", payload)
+
+                // Some RemoteNOW-era input handlers consume the text body
+                // directly rather than the newer JSON insert envelope.
+                publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", text)
+                publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", text)
+            }
         }
     }
 
