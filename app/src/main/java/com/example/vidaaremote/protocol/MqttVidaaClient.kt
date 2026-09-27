@@ -277,6 +277,40 @@ class MqttVidaaClient(
         }
     }
 
+    override suspend fun sendText(text: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            requireConnected()
+            check(isAuthenticated) { "Pair the TV before using the keyboard." }
+            require(text.isNotBlank()) { "Enter some text first." }
+
+            val payload = JSONObject()
+                .put("text", text)
+                .put("action", "insert")
+                .toString()
+
+            val id = topicClientId.ifBlank { clientId }
+            publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", payload)
+            publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", payload)
+        }
+    }
+
+    override suspend fun launchYouTube(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            requireConnected()
+            check(isAuthenticated) { "Pair the TV before launching YouTube." }
+
+            val payload = JSONObject()
+                .put("name", "YouTube")
+                .put("appId", "3")
+                .put("urlType", 37)
+                .put("storeType", 0)
+                .put("url", "youtube")
+                .toString()
+
+            publish(topic("ui_service", "launchapp"), payload)
+        }
+    }
+
     override fun disconnect() {
         disconnectInternal()
     }
