@@ -1,10 +1,5 @@
 package com.example.vidaaremote.ui
 
-import android.app.Activity
-import android.content.Intent
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,9 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.example.vidaaremote.model.TvDevice
 import com.example.vidaaremote.protocol.VidaaKey
 import com.example.vidaaremote.protocol.VidaaRemoteClient
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 enum class AppScreen { DISCOVERY, PAIRING, REMOTE }
 
@@ -38,46 +31,6 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
     var busy by remember { mutableStateOf(false) }
     var keyboardText by remember { mutableStateOf("") }
 
-    val voiceLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spoken = result.data
-                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
-                ?.trim()
-
-            if (!spoken.isNullOrBlank()) {
-                keyboardText = spoken
-                scope.launch {
-                    busy = true
-                    message = "Searching YouTube for: $spoken"
-                    client.sendText(spoken)
-                        .onSuccess {
-                            delay(450)
-                            client.sendKey(VidaaKey.OK)
-                            message = "Voice search sent: $spoken"
-                        }
-                        .onFailure { message = it.message }
-                    busy = false
-                }
-            }
-        }
-    }
-
-    fun launchSpeechRecognizer() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "What do you want to search on YouTube?")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-        }
-        runCatching { voiceLauncher.launch(intent) }
-            .onFailure { message = "Speech recognition is not available on this phone." }
-    }
 
     Scaffold(
         topBar = {
@@ -214,27 +167,7 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                             busy = false
                         }
                     },
-                    onVoiceYouTube = {
-                        scope.launch {
-                            busy = true
-                            message = "Opening YouTube voice search…"
-                            client.launchYouTube()
-                                .onSuccess {
-                                    // P0218/older YouTube layouts differ from newer VIDAA.
-                                    // Do not navigate LEFT/UP/OK here: on P0218 that sequence
-                                    // lands on the virtual keyboard's "v" key and types it.
-                                    delay(2500)
-                                    message = "YouTube opened. Select Search on the TV, then speak."
-                                    busy = false
-                                    launchSpeechRecognizer()
-                                }
-                                .onFailure {
-                                    message = it.message
-                                    busy = false
-                                }
-                        }
-                    }
-                )
+)
             }
         }
     }
@@ -349,7 +282,6 @@ private fun RemoteScreen(
     onKey: (VidaaKey) -> Unit,
     onSendText: (String) -> Unit,
     onYouTube: () -> Unit,
-    onVoiceYouTube: () -> Unit,
 ) {
     Text(device?.name ?: "VIDAA TV", style = MaterialTheme.typography.headlineMedium)
     Text("${device?.host.orEmpty()} • connected", style = MaterialTheme.typography.bodySmall)
@@ -414,29 +346,14 @@ private fun RemoteScreen(
     Text("YouTube & keyboard", style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(10.dp))
 
-    Row(
+    Button(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        enabled = !busy,
+        onClick = onYouTube,
     ) {
-        Button(
-            modifier = Modifier.weight(1f),
-            enabled = !busy,
-            onClick = onYouTube,
-        ) {
-            Icon(Icons.Default.PlayCircleFilled, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("YouTube")
-        }
-
-        FilledTonalButton(
-            modifier = Modifier.weight(1f),
-            enabled = !busy,
-            onClick = onVoiceYouTube,
-        ) {
-            Icon(Icons.Default.Mic, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Voice Search")
-        }
+        Icon(Icons.Default.PlayCircleFilled, contentDescription = null)
+        Spacer(Modifier.width(6.dp))
+        Text("YouTube")
     }
 
     Spacer(Modifier.height(14.dp))
@@ -475,7 +392,7 @@ private fun RemoteScreen(
 
     Spacer(Modifier.height(10.dp))
     Text(
-        "Tip: open a search or text field on the TV first. Voice Search opens YouTube and attempts to focus its Search screen automatically.",
+        "P0218 keyboard: open a search or text field on the TV first, then type here and tap Send text to TV.",
         style = MaterialTheme.typography.bodySmall,
     )
 }
