@@ -283,28 +283,34 @@ class MqttVidaaClient(
             check(isAuthenticated) { "Pair the TV before using the keyboard." }
             require(text.isNotBlank()) { "Enter some text first." }
 
-            val payload = JSONObject()
-                .put("text", text)
-                .put("action", "insert")
-                .toString()
-
             val id = topicClientId.ifBlank { clientId }
 
-            // Standard VIDAA virtual-keyboard injection.
-            publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", payload)
-            publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", payload)
-
             if (currentAuthMethod == AuthMethod.LEGACY) {
-                // RemoteNOW/P0218 compatibility: older sets differ in which
-                // service/action accepts keyboard input. Send the equivalent
-                // legacy variants only for the legacy profile.
-                publish("/remoteapp/tv/ui_service/$id/actions/txtinputdata", payload)
-                publish("/remoteapp/tv/ui_service/$id/actions/bwsinputdata", payload)
-
-                // Some RemoteNOW-era input handlers consume the text body
-                // directly rather than the newer JSON insert envelope.
-                publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", text)
-                publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", text)
+                // P0218 / RemoteNOW: use the remote_service path already proven
+                // to work on this firmware, one Linux-style key per character.
+                text.forEach { ch ->
+                    val key = when {
+                        ch in 'a'..'z' || ch in 'A'..'Z' -> "KEY_${ch.uppercaseChar()}"
+                        ch in '0'..'9' -> "KEY_$ch"
+                        ch == ' ' -> "KEY_SPACE"
+                        ch == '.' -> "KEY_DOT"
+                        ch == '-' -> "KEY_MINUS"
+                        ch == '_' -> "KEY_UNDERSCORE"
+                        ch == '/' -> "KEY_SLASH"
+                        else -> null
+                    }
+                    if (key != null) {
+                        publish("/remoteapp/tv/remote_service/$id/actions/sendkey", key)
+                        Thread.sleep(70)
+                    }
+                }
+            } else {
+                val payload = JSONObject()
+                    .put("text", text)
+                    .put("action", "insert")
+                    .toString()
+                publish("/remoteapp/tv/platform_service/$id/actions/txtinputdata", payload)
+                publish("/remoteapp/tv/platform_service/$id/actions/bwsinputdata", payload)
             }
         }
     }
