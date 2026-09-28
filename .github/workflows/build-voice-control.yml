@@ -1,0 +1,41 @@
+name: Build Voice Phone Control APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "VoiceControl/**"
+      - ".github/workflows/build-voice-control.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Build debug APK
+        run: gradle --no-daemon -p VoiceControl :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-phone-control-debug-apk
+          path: VoiceControl/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
