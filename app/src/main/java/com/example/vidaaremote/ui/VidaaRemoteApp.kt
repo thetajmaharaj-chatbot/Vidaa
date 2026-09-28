@@ -142,20 +142,48 @@ fun VidaaRemoteApp(client: VidaaRemoteClient) {
                     device = selectedDevice,
                     busy = busy,
                     keyboardText = keyboardText,
-                    onKeyboardTextChange = { keyboardText = it },
+                    onKeyboardTextChange = { newText ->
+                        val oldText = keyboardText
+                        keyboardText = newText
+
+                        scope.launch {
+                            when {
+                                newText.length > oldText.length && newText.startsWith(oldText) -> {
+                                    newText.substring(oldText.length).forEach { ch ->
+                                        val wireKey = when {
+                                            ch.isLetter() -> "KEY_${ch.uppercaseChar()}"
+                                            ch.isDigit() -> "KEY_$ch"
+                                            ch == ' ' -> "KEY_SPACE"
+                                            ch == '.' -> "KEY_DOT"
+                                            ch == '-' -> "KEY_MINUS"
+                                            ch == '/' -> "KEY_SLASH"
+                                            else -> null
+                                        }
+                                        if (wireKey != null) {
+                                            client.sendKeyboardKey(wireKey)
+                                                .onFailure { message = it.message }
+                                        }
+                                    }
+                                }
+                                newText.length < oldText.length && oldText.startsWith(newText) -> {
+                                    repeat(oldText.length - newText.length) {
+                                        client.sendKeyboardKey("KEY_BACKSPACE")
+                                            .onFailure { message = it.message }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     onKey = { key ->
                         scope.launch {
                             client.sendKey(key)
                                 .onFailure { message = it.message }
                         }
                     },
-                    onSendText = { text ->
+                    onKeyboardEnter = {
                         scope.launch {
-                            busy = true
-                            client.sendText(text)
-                                .onSuccess { message = "Text sent to TV." }
+                            client.sendKeyboardKey("KEY_ENTER")
                                 .onFailure { message = it.message }
-                            busy = false
                         }
                     },
                     onYouTube = {
@@ -280,7 +308,7 @@ private fun RemoteScreen(
     keyboardText: String,
     onKeyboardTextChange: (String) -> Unit,
     onKey: (VidaaKey) -> Unit,
-    onSendText: (String) -> Unit,
+    onKeyboardEnter: () -> Unit,
     onYouTube: () -> Unit,
 ) {
     Text(device?.name ?: "VIDAA TV", style = MaterialTheme.typography.headlineMedium)
@@ -371,28 +399,13 @@ private fun RemoteScreen(
             imeAction = ImeAction.Send,
         ),
         keyboardActions = KeyboardActions(
-            onSend = {
-                if (keyboardText.isNotBlank()) {
-                    onSendText(keyboardText)
-                }
-            }
+            onSend = onKeyboardEnter
         ),
     )
 
     Spacer(Modifier.height(10.dp))
-    Button(
-        modifier = Modifier.fillMaxWidth(),
-        enabled = keyboardText.isNotBlank() && !busy,
-        onClick = { onSendText(keyboardText) },
-    ) {
-        Icon(Icons.Default.Keyboard, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
-        Text("Send text to TV")
-    }
-
-    Spacer(Modifier.height(10.dp))
     Text(
-        "P0218 keyboard: open a search or text field on the TV first, then type here and tap Send text to TV.",
+        "Live keyboard: open a search or text field on the TV, then type here. Each key is sent immediately. Backspace and Enter are sent as remote keys.",
         style = MaterialTheme.typography.bodySmall,
     )
 }
