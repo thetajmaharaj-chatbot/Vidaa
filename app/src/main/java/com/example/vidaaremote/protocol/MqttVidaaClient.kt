@@ -277,6 +277,22 @@ class MqttVidaaClient(
         }
     }
 
+    override suspend fun sendKeyboardKey(key: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            requireConnected()
+            check(isAuthenticated) { "Pair the TV before using the keyboard." }
+
+            val allowed = key.matches(Regex("KEY_[A-Z0-9]+")) ||
+                key in setOf("KEY_SPACE", "KEY_BACKSPACE", "KEY_ENTER", "KEY_DOT", "KEY_MINUS", "KEY_SLASH")
+            require(allowed) { "Unsupported keyboard key." }
+
+            publish(
+                "/remoteapp/tv/remote_service/${topicClientId.ifBlank { clientId }}/actions/sendkey",
+                key,
+            )
+        }
+    }
+
     override suspend fun sendText(text: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             requireConnected()
