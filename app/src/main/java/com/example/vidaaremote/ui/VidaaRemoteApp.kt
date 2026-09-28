@@ -399,7 +399,7 @@ private fun RemoteScreen(
             imeAction = ImeAction.Send,
         ),
         keyboardActions = KeyboardActions(
-            onSend = onKeyboardEnter
+            onSend = { onKeyboardEnter() }
         ),
     )
 
